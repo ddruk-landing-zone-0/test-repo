@@ -8,12 +8,19 @@ set -e
 # Start the PostgreSQL service
 pg_ctlcluster 12 main start
 
-# Create user if not exists
-su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_USER}'\" | grep -q 1 || psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+# Check if user exists
+USER_EXISTS=$(su - postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${POSTGRES_USER}'\"")
+
+if [ "$USER_EXISTS" = "1" ]; then
+  echo "User ${POSTGRES_USER} exists. Altering password..."
+  su - postgres -c "psql -c \"ALTER USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+else
+  echo "User ${POSTGRES_USER} does not exist. Creating user..."
+  su - postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+fi
 
 # Keep the container running
 tail -f /dev/null
-
 
 
 
