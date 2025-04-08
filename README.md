@@ -8,15 +8,18 @@ set -e
 # Start the PostgreSQL service
 pg_ctlcluster 12 main start
 
-# Check if user exists
-USER_EXISTS=$(su - postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${POSTGRES_USER}'\"")
+# Only try to create the user if env vars are set
+if [[ -n "$POSTGRES_USER" && -n "$POSTGRES_PASSWORD" ]]; then
+  echo "Attempting to create user: $POSTGRES_USER"
 
-if [ "$USER_EXISTS" = "1" ]; then
-  echo "User ${POSTGRES_USER} exists. Altering password..."
-  su - postgres -c "psql -c \"ALTER USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+  if su - postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""; then
+    echo "User ${POSTGRES_USER} created successfully."
+  else
+    echo "User creation failed. The user '${POSTGRES_USER}' may already exist."
+    echo "Please choose a different username and password."
+  fi
 else
-  echo "User ${POSTGRES_USER} does not exist. Creating user..."
-  su - postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+  echo "POSTGRES_USER and POSTGRES_PASSWORD must be set to create a user."
 fi
 
 # Keep the container running
