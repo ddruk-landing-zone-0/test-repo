@@ -1,22 +1,18 @@
 # test-repo
 
 ```
-FROM ubuntu:20.04
+#!/bin/bash
 
-ENV DEBIAN_FRONTEND=noninteractive
+set -e
 
-# Install PostgreSQL
-RUN apt-get update && apt-get install -y postgresql postgresql-contrib
+# Start the PostgreSQL service
+pg_ctlcluster 12 main start
 
-# Copy entrypoint script
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Create user if not exists
+su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_USER}'\" | grep -q 1 || psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
 
-# Expose the default Postgres port
-EXPOSE 5432
-
-# Run the script
-ENTRYPOINT ["/entrypoint.sh"]
+# Keep the container running
+tail -f /dev/null
 
 
 
