@@ -1,6 +1,57 @@
 # test-repo
 
 ```
+import psycopg2
+from psycopg2 import sql, OperationalError
+
+def connect_to_postgres_db(host='localhost', port=5432, db_name='', user='', password=''):
+    try:
+        conn = psycopg2.connect(
+            dbname=db_name,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        print(f"✅ Connected to database '{db_name}' as user '{user}'")
+        return conn
+    except OperationalError as e:
+        print("❌ Connection failed:", e)
+        return None
+
+if __name__ == '__main__':
+    conn = connect_to_postgres_db(
+        db_name='mydb',
+        user='myuser',
+        password='mypassword',
+        host='localhost',
+        port=5432
+    )
+
+    if conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_database(), current_user;")
+            print("📦 Result:", cur.fetchone())
+
+        conn.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #!/bin/bash
 
 set -e
