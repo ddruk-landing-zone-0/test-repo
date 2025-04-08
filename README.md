@@ -36,6 +36,7 @@ if __name__ == '__main__':
         conn.close()
 
 
+echo "host all all 172.20.0.1/32 md5" >> /etc/postgresql/12/main/pg_hba.conf
 
 
 
