@@ -1,6 +1,11 @@
 # test-repo
 
 ```
+apache-superset
+psycopg2-binary
+
+
+
 #!/bin/bash
 set -e
 
