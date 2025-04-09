@@ -1,6 +1,83 @@
 # test-repo
 
 ```
+#!/bin/bash
+set -e
+
+# Initialize the database (only runs if not already initialized)
+superset db upgrade
+
+# Create an admin user if it doesn't exist
+superset fab create-admin \
+    --username admin \
+    --firstname Admin \
+    --lastname User \
+    --email admin@example.com \
+    --password admin || true
+
+# Load examples (optional)
+# superset load_examples
+
+# Setup roles and permissions
+superset init
+
+# Start the server
+superset run -h 0.0.0.0 -p 8088
+
+
+
+
+
+
+chmod +x entrypoint.sh
+
+
+
+# Base image
+FROM python:3.9-slim
+
+# Set environment variables
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    SUPERSET_HOME=/app/superset
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    libpq-dev \
+    libsasl2-dev \
+    libldap2-dev \
+    curl \
+    default-libmysqlclient-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy entrypoint
+COPY entrypoint.sh .
+
+# Expose Superset port
+EXPOSE 8088
+
+# Run Superset
+CMD ["./entrypoint.sh"]
+
+
+
+
+
+
+
+
+
 import psycopg2
 from psycopg2 import sql, OperationalError
 
