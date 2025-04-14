@@ -1,5 +1,22 @@
 
 ```
+# Copy the local GPG key into the container
+COPY server-8.0.asc /tmp/server-8.0.asc
+
+RUN apt-get update && apt-get install -y wget gnupg curl sudo && \
+    # Convert to gpg binary format and move to trusted location
+    gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-8.gpg /tmp/server-8.0.asc && \
+    # Add MongoDB 8.0 repo
+    echo "deb [arch=amd64,arm64 signed-by=/etc/apt/trusted.gpg.d/mongodb-8.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" > /etc/apt/sources.list.d/mongodb-org-8.0.list && \
+    apt-get update && \
+    apt-get install -y mongodb-org && \
+    apt-get clean
+
+
+
+
+
+
 ARG BASE_IMAGE=ubuntu:22.04
 FROM $BASE_IMAGE
 
