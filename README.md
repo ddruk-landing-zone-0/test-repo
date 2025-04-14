@@ -1,3 +1,34 @@
+
+```
+ARG BASE_IMAGE=ubuntu:22.04
+FROM $BASE_IMAGE
+
+USER 0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Copy the local MongoDB 8.0 GPG key
+COPY server-8.0.asc /tmp/server-8.0.asc
+
+RUN apt-get update && apt-get install -y wget gnupg sudo curl && \
+    gpg --dearmor /tmp/server-8.0.asc > /etc/apt/trusted.gpg.d/mongodb.gpg && \
+    echo "deb [ arch=amd64,arm64 signed-by=/etc/apt/trusted.gpg.d/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-8.0.list && \
+    apt-get update && \
+    apt-get install -y mongodb-org && \
+    apt-get clean
+
+COPY start-mongo.sh ./start-mongo.sh
+RUN chmod +x ./start-mongo.sh
+
+USER 1001
+EXPOSE 27017
+
+ENTRYPOINT ["./start-mongo.sh"]
+
+
+```
+
+
 Here is a technical-style README draft tailored for your Cloud Run restart solution:
 
 🔁 Manual Restart for Google Cloud Run Services
