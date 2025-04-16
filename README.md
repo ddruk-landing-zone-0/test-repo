@@ -1,5 +1,86 @@
 
 ```
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl gnupg lsb-release wget software-properties-common \
+    mysql-server postgresql postgresql-contrib \
+    supervisor
+
+# --------------------
+# Install MongoDB
+# --------------------
+RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/mongodb.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list && \
+    apt-get update && apt-get install -y mongodb-org && \
+    mkdir -p /data/db && chown -R mongodb:mongodb /data/db
+
+# Setup MySQL
+RUN mkdir -p /var/lib/mysql && chown -R mysql:mysql /var/lib/mysql
+RUN echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY 'root'; FLUSH PRIVILEGES;" > /tmp/init.sql
+
+# Setup PostgreSQL
+RUN mkdir -p /var/lib/postgresql/data && chown -R postgres:postgres /var/lib/postgresql/data
+
+# ---------------------
+# Supervisor config
+# ---------------------
+RUN mkdir -p /var/log/supervisor
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+EXPOSE 27017 3306 5432
+
+VOLUME ["/data/db", "/var/lib/mysql", "/var/lib/postgresql/data"]
+
+CMD ["/usr/bin/supervisord"]
+
+
+
+
+
+[supervisord]
+nodaemon=true
+
+[program:mongodb]
+command=/usr/bin/mongod --dbpath /data/db
+user=mongodb
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/mongo.err.log
+stdout_logfile=/var/log/supervisor/mongo.out.log
+
+[program:mysql]
+command=/usr/sbin/mysqld
+user=mysql
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/mysql.err.log
+stdout_logfile=/var/log/supervisor/mysql.out.log
+
+[program:postgres]
+command=/usr/lib/postgresql/14/bin/postgres -D /var/lib/postgresql/data
+user=postgres
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/postgres.err.log
+stdout_logfile=/var/log/supervisor/postgres.out.log
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Copy the local GPG key into the container
 COPY server-8.0.asc /tmp/server-8.0.asc
 
