@@ -1,5 +1,48 @@
 
 ```
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+java -version
+
+: "${GITHUB_REF?Expected env var GITHUB_REF not set}"
+: "${GITHUB_SHA?Expected env var GITHUB_SHA not set}"
+
+VERSION=""
+if [[ "$GITHUB_REF" == refs/heads/* ]]; then
+  GIT_BRANCH="${GITHUB_REF#refs/heads/}"
+  GIT_BRANCH_SLUG=$(echo "$GIT_BRANCH" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '-' | sed 's/^-*//' | sed 's/-*$//')
+  VERSION="${GIT_BRANCH_SLUG}-${GITHUB_SHA}"
+elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+  GIT_TAG="${GITHUB_REF#refs/tags/}"
+  VERSION="$GIT_TAG"
+else
+  VERSION="local-${GITHUB_SHA}"
+fi
+
+export VERSION
+
+# Determine Maven command
+MVN=$( [ -f "./mvnw" ] && echo "./mvnw" || echo "mvn" )
+
+# Build image locally (to Docker daemon)
+$MVN compile jib:dockerBuild \
+  -Djib.to.image="my-app:${VERSION}" \
+  -DskipTests \
+  --batch-mode
+
+echo "✅ Image built: my-app:${VERSION}"
+echo "📦 Listing Docker images..."
+docker images | grep "my-app"
+
+
+
+
+
+
+
+
+
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
