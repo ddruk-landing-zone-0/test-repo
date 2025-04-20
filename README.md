@@ -1,5 +1,8 @@
 
 ```
+IMAGE_NAME_TAG=$(docker images --format '{{.Repository}}:{{.Tag}}' | head -n 1)
+
+
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
