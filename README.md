@@ -1,5 +1,82 @@
 
 ```
+- name: Generate beautified report body and inject into job.yaml
+  run: |
+    FILE_NAME="report-open-only.csv"
+    OUTFILE="/tmp/mail.txt"
+
+    # Read CSV and format dynamically
+    awk -F',' '
+      NR==1 {
+        for(i=1;i<=NF;i++) {
+          header[i]=$i;
+          width[i]=length($i);
+        }
+        next;
+      }
+      {
+        for(i=1;i<=NF;i++) {
+          width[i]=(length($i) > width[i]) ? length($i) : width[i];
+          data[NR-1,i]=$i;
+        }
+        maxrow=NR-1;
+      }
+      END {
+        # Header row
+        for(i=1;i<=length(header);i++) {
+          printf "%-*s%s", width[i], header[i], (i==length(header) ? ORS : " | ");
+        }
+        # Separator
+        for(i=1;i<=length(header);i++) {
+          printf "%-*s%s", width[i], gensub(/./,"-","g", sprintf("%*s", width[i], "")), (i==length(header) ? ORS : "-+-");
+        }
+        # Data rows
+        for(r=1;r<=maxrow;r++) {
+          for(i=1;i<=length(header);i++) {
+            printf "%-*s%s", width[i], data[r,i], (i==length(header) ? ORS : " | ");
+          }
+        }
+      }
+    ' "$FILE_NAME" > "$OUTFILE"
+
+    # Prepend subject and headers
+    FINAL_MAIL="/tmp/final_mail.txt"
+    {
+      echo "From: pnl_sankalp@list.db.com"
+      echo "To: debasmit-a.roy@db.com"
+      echo "Subject: Beautified CSV Report"
+      echo
+      echo "Hi,"
+      echo
+      echo "Here is the formatted CSV content:"
+      echo
+      cat "$OUTFILE"
+    } > "$FINAL_MAIL"
+
+    # Escape for YAML substitution (replace newlines with @ temporarily)
+    ESCAPED_CONTENT=$(sed 's/[\/&]/\\&/g' "$FINAL_MAIL" | tr '\n' '@')
+
+    # Inject into job.yaml replacing placeholder __EMAIL_CONTENT__
+    sed -i "s|__EMAIL_CONTENT__|$ESCAPED_CONTENT|" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+
+
+command: ["sh", "-c"]
+args:
+  - |
+    echo "__EMAIL_CONTENT__" | tr '@' '\n' > /tmp/mail.txt
+
+    curl -vk --url 'smtp://mta-service.mail-transfer-agent.svc.cluster.local:25' \
+      --mail-from 'pnl_sankalp@list.db.com' \
+      --mail-rcpt 'debasmit-a.roy@db.com' \
+      --upload-file /tmp/mail.txt
+
+
+
+
+
 
 - name: Generate beautified report body
   run: |
