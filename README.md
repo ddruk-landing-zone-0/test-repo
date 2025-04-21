@@ -1,5 +1,84 @@
 
 ```
+FILE_NAME="report-open-only.csv"
+OUTFILE="/tmp/mail.txt"
+ENCODED_MAIL="/tmp/final_mail.b64"
+
+# Step 1: Generate beautified mail body
+awk -F',' '
+  function pad_right(str, len) {
+    pad = ""
+    while (length(str) + length(pad) < len) pad = pad " "
+    return str pad
+  }
+
+  NR==1 {
+    for (i = 1; i <= NF; i++) {
+      header[i] = $i
+      width[i] = length($i)
+    }
+    next
+  }
+  {
+    for (i = 1; i <= NF; i++) {
+      width[i] = (length($i) > width[i]) ? length($i) : width[i]
+      data[NR-1, i] = $i
+    }
+    maxrow = NR - 1
+  }
+  END {
+    print "Hi,\n\nHere is the trace for Hardcoded Credential:\n"
+    for (i = 1; i <= length(header); i++) {
+      printf "%s%s", pad_right(header[i], width[i]), (i == length(header) ? ORS : " | ")
+    }
+    for (i = 1; i <= length(header); i++) {
+      sep = ""
+      for (j = 1; j <= width[i]; j++) sep = sep "-"
+      printf "%s%s", sep, (i == length(header) ? ORS : "-+-")
+    }
+    for (r = 1; r <= maxrow; r++) {
+      for (i = 1; i <= length(header); i++) {
+        printf "%s%s", pad_right(data[r, i], width[i]), (i == length(header) ? ORS : " | ")
+      }
+    }
+  }
+' "$FILE_NAME" > "$OUTFILE"
+
+# Step 2: Encode the whole content
+base64 -w 0 "$OUTFILE" > "$ENCODED_MAIL"
+
+# Step 3: Replace placeholder in Helm YAML (base64-safe)
+ESCAPED=$(cat "$ENCODED_MAIL")
+sed -i "s#__EMAIL_B64_CONTENT__#$ESCAPED#" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+
+
+
+
+
+
+
+containers:
+  - name: mail-job
+    image: your-image
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "__EMAIL_B64_CONTENT__" | base64 -d > /tmp/mail.txt && \
+        sendmail < /tmp/mail.txt
+
+
+
+
+
+
+
+
+
+
+
 
 awk -F',' '
   function pad_right(str, len) {
