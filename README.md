@@ -1,5 +1,47 @@
 
 ```
+
+awk -F',' '
+  NR==1 {
+    for (i = 1; i <= NF; i++) {
+      header[i] = $i
+      width[i] = length($i)
+    }
+    next
+  }
+  {
+    for (i = 1; i <= NF; i++) {
+      width[i] = (length($i) > width[i]) ? length($i) : width[i]
+      data[NR-1, i] = $i
+    }
+    maxrow = NR - 1
+  }
+  END {
+    # Print header
+    for (i = 1; i <= length(header); i++) {
+      printf "%-*s%s", width[i], header[i], (i == length(header) ? ORS : " | ")
+    }
+
+    # Print separator line manually
+    for (i = 1; i <= length(header); i++) {
+      sep = ""
+      for (j = 1; j <= width[i]; j++) sep = sep "-"
+      printf "%s%s", sep, (i == length(header) ? ORS : "-+-")
+    }
+
+    # Print rows
+    for (r = 1; r <= maxrow; r++) {
+      for (i = 1; i <= length(header); i++) {
+        printf "%-*s%s", width[i], data[r, i], (i == length(header) ? ORS : " | ")
+      }
+    }
+  }
+' "$FILE_NAME" > "$OUTFILE"
+
+
+
+
+
 - name: Inject formatted email body into job.yaml safely
   run: |
     FILE_NAME="report-open-only.csv"
