@@ -1,5 +1,60 @@
 
 ```
+
+- name: Prepare MIME email with CSV attachment
+  run: |
+    FILE_NAME="report-open-only.csv"
+    MIME_FILE="/tmp/email_mime.txt"
+
+    # Base64 encode the file into a temporary
+    base64 "$FILE_NAME" > /tmp/encoded.txt
+
+    # Write the full MIME message
+    {
+      echo "From: pnl_sankalp@list.db.com"
+      echo "To: debasmit-a.roy@db.com"
+      echo "Subject: GCP CSV Report"
+      echo "MIME-Version: 1.0"
+      echo "Content-Type: multipart/mixed; boundary=\"boundary42\""
+      echo
+      echo "--boundary42"
+      echo "Content-Type: text/plain; charset=\"UTF-8\""
+      echo "Content-Transfer-Encoding: 7bit"
+      echo
+      echo "Hello from GCP,"
+      echo "Please find the attached CSV report."
+      echo
+      echo "--boundary42"
+      echo "Content-Type: text/csv; name=\"$FILE_NAME\""
+      echo "Content-Transfer-Encoding: base64"
+      echo "Content-Disposition: attachment; filename=\"$FILE_NAME\""
+      echo
+      cat /tmp/encoded.txt
+      echo
+      echo "--boundary42--"
+    } > "$MIME_FILE"
+
+    # Escape for sed (use `@` to preserve line breaks in Helm template)
+    ESCAPED=$(sed -e 's/[\/&]/\\&/g' "$MIME_FILE" | tr '\n' '@')
+
+    # Replace __EMAIL_CONTENT__ in job.yaml
+    sed -i "s|__EMAIL_CONTENT__|$ESCAPED|" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+
+command: ["sh", "-c"]
+args:
+  - |
+    echo "__EMAIL_CONTENT__" | tr '@' '\n' > /tmp/mail.txt
+
+    curl -vk --url 'smtp://mta-service.mail-transfer-agent.svc.cluster.local:25' \
+      --mail-from 'pnl_sankalp@list.db.com' \
+      --mail-rcpt 'debasmit-a.roy@db.com' \
+      --upload-file /tmp/mail.txt
+
+
+
 - name: Prepare MIME email with CSV attachment
   run: |
     FILE_NAME="report-open-only.csv"
