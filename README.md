@@ -1,11 +1,11 @@
 
 ```
-- name: Generate beautified report body and inject into job.yaml
+- name: Inject formatted email body into job.yaml safely
   run: |
     FILE_NAME="report-open-only.csv"
-    OUTFILE="/tmp/mail.txt"
+    FINAL_MAIL="/tmp/final_mail.txt"
 
-    # Read CSV and format dynamically
+    # Format the CSV content into a pretty table
     awk -F',' '
       NR==1 {
         for(i=1;i<=NF;i++) {
@@ -22,42 +22,37 @@
         maxrow=NR-1;
       }
       END {
-        # Header row
         for(i=1;i<=length(header);i++) {
           printf "%-*s%s", width[i], header[i], (i==length(header) ? ORS : " | ");
         }
-        # Separator
         for(i=1;i<=length(header);i++) {
           printf "%-*s%s", width[i], gensub(/./,"-","g", sprintf("%*s", width[i], "")), (i==length(header) ? ORS : "-+-");
         }
-        # Data rows
         for(r=1;r<=maxrow;r++) {
           for(i=1;i<=length(header);i++) {
             printf "%-*s%s", width[i], data[r,i], (i==length(header) ? ORS : " | ");
           }
         }
       }
-    ' "$FILE_NAME" > "$OUTFILE"
+    ' "$FILE_NAME" > /tmp/formatted_table.txt
 
-    # Prepend subject and headers
-    FINAL_MAIL="/tmp/final_mail.txt"
     {
       echo "From: pnl_sankalp@list.db.com"
       echo "To: debasmit-a.roy@db.com"
-      echo "Subject: Beautified CSV Report"
+      echo "Subject: GCP CSV Report"
       echo
-      echo "Hi,"
+      echo "Hello from GCP,"
       echo
-      echo "Here is the formatted CSV content:"
+      echo "Here is the beautified CSV report:"
       echo
-      cat "$OUTFILE"
+      cat /tmp/formatted_table.txt
     } > "$FINAL_MAIL"
 
-    # Escape for YAML substitution (replace newlines with @ temporarily)
-    ESCAPED_CONTENT=$(sed 's/[\/&]/\\&/g' "$FINAL_MAIL" | tr '\n' '@')
+    # Now safely escape it line-by-line for YAML
+    ESCAPED=$(awk '{gsub(/["\\]/, "\\\\&"); gsub(/\n/, ""); print}' "$FINAL_MAIL" | sed ':a;N;$!ba;s/\n/@/g')
 
-    # Inject into job.yaml replacing placeholder __EMAIL_CONTENT__
-    sed -i "s|__EMAIL_CONTENT__|$ESCAPED_CONTENT|" ./utils/mta-job/helm-chart/templates/job.yaml
+    # Replace placeholder using safer method (delimiter @)
+    sed -i.bak "s@__EMAIL_CONTENT__@$ESCAPED@" ./utils/mta-job/helm-chart/templates/job.yaml
 
 
 
