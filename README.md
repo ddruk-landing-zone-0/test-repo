@@ -1,6 +1,52 @@
 
 ```
 
+- name: Generate beautified report body
+  run: |
+    FILE_NAME="report-open-only.csv"
+    OUTFILE="/tmp/mail.txt"
+
+    # Extract header and data
+    HEADER=$(head -n 1 $FILE_NAME)
+    BODY=$(tail -n +2 $FILE_NAME)
+
+    # Convert commas to pipes, pad spaces
+    HEADER_FMT=$(echo "$HEADER" | awk -F',' '{for(i=1;i<=NF;i++) printf "%-10s%s", $i, (i==NF?"":"| ")}')
+    SEPARATOR=$(echo "$HEADER" | awk -F',' '{for(i=1;i<=NF;i++) printf "%-10s%s", "----------", (i==NF?"":"| ")}')
+    DATA_FMT=$(echo "$BODY" | awk -F',' '{printf "%-10s| %-10s| %-10s\n", $1, $2, $3}')
+
+    {
+      echo "From: pnl_sankalp@list.db.com"
+      echo "To: debasmit-a.roy@db.com"
+      echo "Subject: Beautified CSV Report"
+      echo
+      echo "Hi,"
+      echo
+      echo "Here is the CSV content in a table-like format:"
+      echo
+      echo "$HEADER_FMT"
+      echo "$SEPARATOR"
+      echo "$DATA_FMT"
+    } > "$OUTFILE"
+
+    # Replace placeholder in job.yaml (escape for Helm template)
+    ESCAPED=$(sed -e 's/[\/&]/\\&/g' "$OUTFILE" | tr '\n' '@')
+    sed -i "s|__EMAIL_CONTENT__|$ESCAPED|" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+command: ["sh", "-c"]
+args:
+  - |
+    echo "__EMAIL_CONTENT__" | tr '@' '\n' > /tmp/mail.txt
+
+    curl -vk --url 'smtp://mta-service.mail-transfer-agent.svc.cluster.local:25' \
+      --mail-from 'pnl_sankalp@list.db.com' \
+      --mail-rcpt 'debasmit-a.roy@db.com' \
+      --upload-file /tmp/mail.txt
+
+
+
 - name: Prepare MIME email with CSV attachment
   run: |
     FILE_NAME="report-open-only.csv"
