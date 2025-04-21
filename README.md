@@ -2,6 +2,12 @@
 ```
 
 awk -F',' '
+  function pad_right(str, len) {
+    pad = ""
+    while (length(str) + length(pad) < len) pad = pad " "
+    return str pad
+  }
+
   NR==1 {
     for (i = 1; i <= NF; i++) {
       header[i] = $i
@@ -17,27 +23,26 @@ awk -F',' '
     maxrow = NR - 1
   }
   END {
-    # Print header
+    # Header row
     for (i = 1; i <= length(header); i++) {
-      printf "%-*s%s", width[i], header[i], (i == length(header) ? ORS : " | ")
+      printf "%s%s", pad_right(header[i], width[i]), (i == length(header) ? ORS : " | ")
     }
 
-    # Print separator line manually
+    # Separator
     for (i = 1; i <= length(header); i++) {
       sep = ""
       for (j = 1; j <= width[i]; j++) sep = sep "-"
       printf "%s%s", sep, (i == length(header) ? ORS : "-+-")
     }
 
-    # Print rows
+    # Data rows
     for (r = 1; r <= maxrow; r++) {
       for (i = 1; i <= length(header); i++) {
-        printf "%-*s%s", width[i], data[r, i], (i == length(header) ? ORS : " | ")
+        printf "%s%s", pad_right(data[r, i], width[i]), (i == length(header) ? ORS : " | ")
       }
     }
   }
 ' "$FILE_NAME" > "$OUTFILE"
-
 
 
 
