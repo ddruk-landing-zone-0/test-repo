@@ -1,5 +1,86 @@
 
 ```
+- name: Prepare MIME email with CSV attachment
+  run: |
+    FILE_NAME=report-open-only.csv
+    ENCODED_CONTENT=$(base64 -w 0 $FILE_NAME)
+    MIME_CONTENT=$(cat <<EOF
+From: xyz@list.xyz.com
+To: debasmit-a.roy@xyz.com
+Subject: GCP CSV Report
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary42"
+
+--boundary42
+Content-Type: text/plain; charset="UTF-8"
+
+Hello from GCP,
+Please find the attached CSV report.
+
+--boundary42
+Content-Type: text/csv; name="$FILE_NAME"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="$FILE_NAME"
+
+$ENCODED_CONTENT
+--boundary42--
+EOF
+    )
+    
+    # Escape special characters for sed
+    ESCAPED=$(printf '%s\n' "$MIME_CONTENT" | sed -e 's/[\/&]/\\&/g')
+    
+    # Replace __EMAIL_CONTENT__ placeholder in your Helm job.yaml
+    sed -i "s|__EMAIL_CONTENT__|$ESCAPED|" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+
+
+
+
+
+
+
+command: ["sh", "-c"]
+args:
+  - |
+    cat <<EOF > /tmp/mail.txt
+    __EMAIL_CONTENT__
+    EOF
+
+    curl -vk --url 'smtp://mta-service.mail-transfer-agent.svc.cluster.local:25' \
+      --mail-from 'xyz@list.xyz.com' \
+      --mail-rcpt 'debasmit-a.roy@xyz.com' \
+      --upload-file /tmp/mail.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 IMAGE_NAME_TAG=$(docker images --format '{{.Repository}}:{{.Tag}}' | head -n 1)
 
 
