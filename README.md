@@ -2,6 +2,68 @@
 ```
 - name: Prepare MIME email with CSV attachment
   run: |
+    FILE_NAME="report-open-only.csv"
+    ENCODED_CONTENT=$(base64 -w 0 "$FILE_NAME")
+
+    # Create MIME email directly as a file
+    {
+      echo "From: pnl_sankalp@list.db.com"
+      echo "To: debasmit-a.roy@db.com"
+      echo "Subject: GCP CSV Report"
+      echo "MIME-Version: 1.0"
+      echo "Content-Type: multipart/mixed; boundary=\"boundary42\""
+      echo
+      echo "--boundary42"
+      echo "Content-Type: text/plain; charset=\"UTF-8\""
+      echo
+      echo "Hello from GCP,"
+      echo "Please find the attached CSV report."
+      echo
+      echo "--boundary42"
+      echo "Content-Type: text/csv; name=\"$FILE_NAME\""
+      echo "Content-Transfer-Encoding: base64"
+      echo "Content-Disposition: attachment; filename=\"$FILE_NAME\""
+      echo
+      echo "$ENCODED_CONTENT"
+      echo "--boundary42--"
+    } > /tmp/email_mime.txt
+
+    # Escape for sed
+    ESCAPED=$(sed -e 's/[\/&]/\\&/g' /tmp/email_mime.txt | tr '\n' '@')
+
+    # Replace placeholder with escaped content in job.yaml
+    sed -i "s|__EMAIL_CONTENT__|$ESCAPED|" ./utils/mta-job/helm-chart/templates/job.yaml
+
+
+
+
+command: ["sh", "-c"]
+args:
+  - |
+    echo "__EMAIL_CONTENT__" | tr '@' '\n' > /tmp/mail.txt
+
+    curl -vk --url 'smtp://mta-service.mail-transfer-agent.svc.cluster.local:25' \
+      --mail-from 'pnl_sankalp@list.db.com' \
+      --mail-rcpt 'debasmit-a.roy@db.com' \
+      --upload-file /tmp/mail.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- name: Prepare MIME email with CSV attachment
+  run: |
     FILE_NAME=report-open-only.csv
     ENCODED_CONTENT=$(base64 -w 0 $FILE_NAME)
     MIME_CONTENT=$(cat <<EOF
