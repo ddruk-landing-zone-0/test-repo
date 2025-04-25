@@ -1,5 +1,27 @@
 
 ```
+mkdir -p /gcs/data/db /gcs/mongo/data /gcs/var/lib/mysql
+mkdir -p /data/db /mongo/data /var/lib/mysql
+
+mount --bind /gcs/data/db /data/db
+mount --bind /gcs/mongo/data /mongo/data
+mount --bind /gcs/var/lib/mysql /var/lib/mysql
+
+
+
+
+
+mkdir -p /gcs/data/db /gcs/mongo/data /gcs/var/lib/mysql
+
+ln -s /gcs/data/db /data/db
+ln -s /gcs/mongo/data /mongo/data
+ln -s /gcs/var/lib/mysql /var/lib/mysql
+
+
+
+
+
+
 FILE_NAME="report-open-only.csv"
 OUTFILE="/tmp/mail.txt"
 ENCODED_MAIL="/tmp/final_mail.b64"
