@@ -1,5 +1,98 @@
 
 ```
+from flask import Flask, jsonify, render_template_string, request
+import random
+
+app = Flask(__name__)
+
+# Version config (set by environment variable)
+import os
+COLOR = os.environ.get('COLOR', 'blue')
+
+# Stats
+stats = {
+    'blue_200': 0,
+    'green_200': 0,
+    'error': 0
+}
+
+@app.route('/')
+def index():
+    if COLOR == 'blue':
+        stats['blue_200'] += 1
+        return "blue,200", 200
+    else:
+        stats['green_200'] += 1
+        return "green,200", 200
+
+@app.route('/test')
+def test():
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Page</title>
+        <script>
+            async function hit() {
+                try {
+                    const response = await fetch('/');
+                    const text = await response.text();
+                    console.log(text);
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+                updateStats();
+            }
+
+            async function updateStats() {
+                const res = await fetch('/stats');
+                const data = await res.json();
+
+                const total = data.blue_200 + data.green_200 + data.error;
+                let html = `<p>Blue, 200: ${data.blue_200} (${(data.blue_200/total*100).toFixed(2)}%)</p>`;
+                html += `<p>Green, 200: ${data.green_200} (${(data.green_200/total*100).toFixed(2)}%)</p>`;
+                html += `<p>Error (4xx/5xx): ${data.error} (${(data.error/total*100).toFixed(2)}%)</p>`;
+
+                document.getElementById('distribution').innerHTML = html;
+            }
+
+            window.onload = updateStats;
+        </script>
+    </head>
+    <body>
+        <h1>Test Page - {{ color.capitalize() }}</h1>
+        <button onclick="hit()">Hit</button>
+        <div id="distribution"></div>
+    </body>
+    </html>
+    '''
+    return render_template_string(html, color=COLOR)
+
+@app.route('/stats')
+def get_stats():
+    return jsonify(stats)
+
+# Simulate random errors (optional)
+@app.errorhandler(Exception)
+def handle_error(e):
+    # stats['error'] += 1
+    return "Internal Server Error", 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)
+
+
+
+
+
+
+
+
+
+
+
+
+
 mkdir -p /gcs/data/db /gcs/mongo/data /gcs/var/lib/mysql
 mkdir -p /data/db /mongo/data /var/lib/mysql
 
