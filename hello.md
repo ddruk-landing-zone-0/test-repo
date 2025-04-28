@@ -22,8 +22,4 @@ Analyze log data to identify redundant, noisy, or unnecessary entries across the
 Provide actionable, code-level suggestions to optimize logging practices, aiming to reduce storage costs and improve retrieval latency, guided by LLM agents capable of understanding log semantics.
 
 4. Unique Selling Points (USP)
-Implement advanced Retrieval-Augmented Generation (RAG) pipelines to extract actionable insights from massive volumes of logs with high efficiency.
-
-Enable semantic search, deep retrieval, and dynamic summarization to drive intelligent, contextual decision-making at scale.
-
-Deploy the solution on MCP (Model Control Plane) servers to ensure a standardized architecture, scalable operation across multiple workloads, and modular, plugin-based extensibility for easy expansion.
+Implement advanced Retrieval-Augmented Generation (RAG) pipelines to extract actionable insights from massive volumes of logs with high efficiency. We go beyond basic log summarization and pattern analysis by generating actionable insights based on both historical and inherent context. Our system not only detects issues but also suggests concrete actions by analyzing past resolutions and codebase changes. Additionally, we focus on optimizing log volumes to reduce storage costs and retrieval latency. The solution is built following Model Context Protocol (MCP) standards to ensure scalability, modularity, and standardized interactions across all components.
