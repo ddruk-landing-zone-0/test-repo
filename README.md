@@ -1,5 +1,225 @@
 
 ```
+name: Progressive Blue-Green Deployment to Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      SERVICE_NAME:
+        description: 'Cloud Run service name'
+        required: true
+        type: string
+      PROJECT_ID:
+        description: 'GCP Project ID'
+        required: true
+        type: string
+      REGION:
+        description: 'GCP Region'
+        required: true
+        type: string
+      TRAFFIC_SHIFT:
+        description: 'Traffic shift percentage (positive integer, e.g., 20)'
+        required: true
+        type: number
+
+jobs:
+  shift-traffic:
+    name: Progressive Traffic Shift
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: Set up gcloud CLI
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: '${{ inputs.PROJECT_ID }}'
+        install_components: 'beta'
+
+    - name: Fetch Current Traffic Split
+      id: traffic
+      run: |
+        echo "Fetching current traffic split..."
+
+        SERVICE_JSON=$(gcloud run services describe ${{ inputs.SERVICE_NAME }} \
+          --platform=managed \
+          --region=${{ inputs.REGION }} \
+          --format=json)
+
+        BLUE_REVISION=$(echo "$SERVICE_JSON" | jq -r '.status.traffic[] | select(.percent >= 50) | .revisionName')
+        GREEN_REVISION=$(echo "$SERVICE_JSON" | jq -r '.status.traffic[] | select(.revisionName != "'$BLUE_REVISION'") | .revisionName')
+
+        BLUE_PERCENT=$(echo "$SERVICE_JSON" | jq -r '.status.traffic[] | select(.revisionName == "'$BLUE_REVISION'") | .percent')
+        GREEN_PERCENT=$(echo "$SERVICE_JSON" | jq -r '.status.traffic[] | select(.revisionName == "'$GREEN_REVISION'") | .percent')
+
+        echo "BLUE_REVISION=$BLUE_REVISION" >> $GITHUB_ENV
+        echo "GREEN_REVISION=$GREEN_REVISION" >> $GITHUB_ENV
+        echo "BLUE_PERCENT=$BLUE_PERCENT" >> $GITHUB_ENV
+        echo "GREEN_PERCENT=$GREEN_PERCENT" >> $GITHUB_ENV
+
+        echo "Blue Revision: $BLUE_REVISION at $BLUE_PERCENT%"
+        echo "Green Revision: $GREEN_REVISION at $GREEN_PERCENT%"
+
+    - name: Perform Traffic Shift
+      if: ${{ env.BLUE_PERCENT != '0' && env.GREEN_PERCENT != '100' }}
+      run: |
+        echo "Calculating new traffic split with user-specified shift..."
+
+        SHIFT=${{ inputs.TRAFFIC_SHIFT }}
+
+        BLUE_CURRENT=${BLUE_PERCENT}
+        GREEN_CURRENT=${GREEN_PERCENT}
+
+        # New calculations with boundary checks
+        if [ "$BLUE_CURRENT" -le "$SHIFT" ]; then
+          NEW_BLUE=0
+        else
+          NEW_BLUE=$((BLUE_CURRENT - SHIFT))
+        fi
+
+        if [ "$((GREEN_CURRENT + SHIFT))" -ge 100 ]; then
+          NEW_GREEN=100
+        else
+          NEW_GREEN=$((GREEN_CURRENT + SHIFT))
+        fi
+
+        echo "New traffic allocation: $NEW_BLUE% to BLUE, $NEW_GREEN% to GREEN."
+
+        gcloud run services update-traffic ${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --to-revisions ${BLUE_REVISION}=${NEW_BLUE},${GREEN_REVISION}=${NEW_GREEN}
+
+    - name: Skip Traffic Shift (Already completed)
+      if: ${{ env.BLUE_PERCENT == '0' || env.GREEN_PERCENT == '100' }}
+      run: |
+        echo "✅ Traffic shift not needed. Deployment already complete (Blue at 0% or Green at 100%)."
+
+
+
+
+
+
+
+
+
+
+name: Blue Green Deployment to Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      SERVICE_NAME:
+        description: 'Cloud Run service name'
+        required: true
+        type: string
+      PROJECT_ID:
+        description: 'GCP Project ID'
+        required: true
+        type: string
+      REGION:
+        description: 'GCP Region (e.g. us-central1)'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Blue Green Deployment
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'  # Service Account JSON stored as GitHub secret
+
+    - name: Set up gcloud CLI
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: '${{ inputs.PROJECT_ID }}'
+        install_components: 'beta' # Needed for traffic splitting commands
+
+    - name: Get current service revisions
+      id: get-revisions
+      run: |
+        BLUE_REVISION=$(gcloud run services describe ${{ inputs.SERVICE_NAME }} \
+          --platform=managed \
+          --region=${{ inputs.REGION }} \
+          --format="value(status.traffic[0].revisionName)")
+        
+        GREEN_REVISION=$(gcloud run revisions list \
+          --service=${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --sort-by="~createTime" \
+          --format="value(metadata.name)" \
+          --limit=1)
+
+        echo "BLUE_REVISION=${BLUE_REVISION}" >> $GITHUB_ENV
+        echo "GREEN_REVISION=${GREEN_REVISION}" >> $GITHUB_ENV
+
+    - name: Initial Split (Blue 90% - Green 10%)
+      run: |
+        echo "Splitting traffic 90% BLUE and 10% GREEN"
+        gcloud run services update-traffic ${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --to-revisions ${BLUE_REVISION}=90,${GREEN_REVISION}=10
+
+    - name: Sleep between shifts
+      run: sleep 60  # Wait a bit for traffic to settle
+
+    - name: Shift to 50% - 50%
+      run: |
+        echo "Splitting traffic 50% BLUE and 50% GREEN"
+        gcloud run services update-traffic ${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --to-revisions ${BLUE_REVISION}=50,${GREEN_REVISION}=50
+
+    - name: Sleep between shifts
+      run: sleep 60
+
+    - name: Shift to 20% Blue - 80% Green
+      run: |
+        echo "Splitting traffic 20% BLUE and 80% GREEN"
+        gcloud run services update-traffic ${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --to-revisions ${BLUE_REVISION}=20,${GREEN_REVISION}=80
+
+    - name: Sleep between shifts
+      run: sleep 60
+
+    - name: Shift to 0% Blue - 100% Green (Finalize Green)
+      run: |
+        echo "Finalizing deployment, 100% GREEN"
+        gcloud run services update-traffic ${{ inputs.SERVICE_NAME }} \
+          --region=${{ inputs.REGION }} \
+          --to-revisions ${GREEN_REVISION}=100
+
+    - name: Done
+      run: echo "✅ Blue-Green deployment complete!"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 from flask import Flask, jsonify, render_template_string, request
 import random
 
