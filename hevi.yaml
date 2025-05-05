@@ -1,0 +1,172 @@
+```
+name: Schedule Progressive Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      SERVICE_NAME:
+        description: 'Cloud Run service name'
+        required: true
+        type: string
+      PROJECT_ID:
+        description: 'GCP Project ID'
+        required: true
+        type: string
+      REGION:
+        description: 'GCP Region'
+        required: true
+        type: string
+      TRAFFIC_SHIFT:
+        description: 'Traffic shift percentage'
+        required: true
+        type: number
+      CRON_PERIOD:
+        description: 'Cron period in cron format'
+        required: true
+        type: string
+      ACTION:
+        description: 'Install or Uninstall'
+        required: true
+        type: choice
+        options:
+          - Install
+          - Uninstall
+
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Authenticate to GKE (mock or replace with actual)
+        run: |
+          echo "You would authenticate to your cluster here."
+          # gcloud container clusters get-credentials my-cluster --region ${{ inputs.REGION }}
+
+      - name: Create K8s Secret for GitHub Token
+        if: ${{ inputs.ACTION == 'Install' }}
+        run: |
+          kubectl delete secret github-token --ignore-not-found
+          kubectl create secret generic github-token \
+            --from-literal=token=${{ secrets.GITHUB_TOKEN }}
+          echo "✅ GitHub token secret created"
+
+      - name: Prepare and Apply CronJob YAML
+        if: ${{ inputs.ACTION == 'Install' }}
+        run: |
+          sed -i "s|{{SERVICE_NAME}}|${{ inputs.SERVICE_NAME }}|g" k8s/cronjob.yaml
+          sed -i "s|{{PROJECT_ID}}|${{ inputs.PROJECT_ID }}|g" k8s/cronjob.yaml
+          sed -i "s|{{REGION}}|${{ inputs.REGION }}|g" k8s/cronjob.yaml
+          sed -i "s|{{TRAFFIC_SHIFT}}|${{ inputs.TRAFFIC_SHIFT }}|g" k8s/cronjob.yaml
+          sed -i "s|{{CRON_PERIOD}}|${{ inputs.CRON_PERIOD }}|g" k8s/cronjob.yaml
+
+          kubectl apply -f k8s/cronjob.yaml
+
+      - name: Uninstall CronJob
+        if: ${{ inputs.ACTION == 'Uninstall' }}
+        run: |
+          kubectl delete cronjob progressive-bluegreen || true
+          kubectl delete secret github-token || true
+          echo "🗑️ Uninstalled CronJob and secret"
+
+
+
+
+
+
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: progressive-bluegreen
+spec:
+  schedule: "{{CRON_PERIOD}}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: gh-workflow
+              image: ghcr.io/nektos/act-environments-ubuntu:18.04  # or another runner image
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: github-token
+                      key: token
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Triggering workflow using act with token..."
+                  act -W .github/workflows/progressive-bluegreen.yml \
+                      -P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest \
+                      -e <(echo '{
+                        "inputs": {
+                          "SERVICE_NAME": "{{SERVICE_NAME}}",
+                          "PROJECT_ID": "{{PROJECT_ID}}",
+                          "REGION": "{{REGION}}",
+                          "TRAFFIC_SHIFT": "{{TRAFFIC_SHIFT}}"
+                        }
+                      }')
+          restartPolicy: OnFailure
+
+
+
+
+
+
+
+
+
+
+
+
+# Assuming it’s reusable
+on:
+  workflow_call:
+    inputs:
+      SERVICE_NAME:
+        required: true
+        type: string
+      PROJECT_ID:
+        required: true
+        type: string
+      REGION:
+        required: true
+        type: string
+      TRAFFIC_SHIFT:
+        required: true
+        type: number
+
+jobs:
+  bluegreen-rollout:
+    runs-on: ubuntu-latest
+    outputs:
+      green_percent: ${{ steps.green_percent_output.outputs.value }}
+    steps:
+      # your blue-green rollout steps
+      - name: Extract Green % (mock)
+        id: green_percent_output
+        run: echo "::set-output name=value::100"
+
+  uninstall-scheduler:
+    if: ${{ needs.bluegreen-rollout.outputs.green_percent == '100' }}
+    uses: ./.github/workflows/progressive-scheduler.yml
+    with:
+      SERVICE_NAME: ${{ inputs.SERVICE_NAME }}
+      PROJECT_ID: ${{ inputs.PROJECT_ID }}
+      REGION: ${{ inputs.REGION }}
+      TRAFFIC_SHIFT: ${{ inputs.TRAFFIC_SHIFT }}
+      CRON_PERIOD: '*/5 * * * *'  # Not important for uninstall
+      ACTION: Uninstall
+    secrets: inherit
+
+
+
+
+```
