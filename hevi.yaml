@@ -5,27 +5,21 @@ on:
   workflow_dispatch:
     inputs:
       SERVICE_NAME:
-        description: 'Cloud Run service name'
         required: true
         type: string
       PROJECT_ID:
-        description: 'GCP Project ID'
         required: true
         type: string
       REGION:
-        description: 'GCP Region'
         required: true
         type: string
       TRAFFIC_SHIFT:
-        description: 'Traffic shift percentage'
         required: true
         type: number
       CRON_PERIOD:
-        description: 'Cron period in cron format'
         required: true
         type: string
       ACTION:
-        description: 'Install or Uninstall'
         required: true
         type: choice
         options:
@@ -33,45 +27,40 @@ on:
           - Uninstall
 
 jobs:
-  scheduler:
+  schedule-deployment:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Authenticate to GKE (mock)
+        run: echo "🔐 Authenticate to GKE here (via Workload Identity or KUBECONFIG)"
 
-      - name: Authenticate to GKE (mock or replace with actual)
-        run: |
-          echo "You would authenticate to your cluster here."
-          # gcloud container clusters get-credentials my-cluster --region ${{ inputs.REGION }}
-
-      - name: Create K8s Secret for GitHub Token
+      - name: Create Secret for GitHub Token
         if: ${{ inputs.ACTION == 'Install' }}
         run: |
-          kubectl delete secret github-token --ignore-not-found
-          kubectl create secret generic github-token \
-            --from-literal=token=${{ secrets.GITHUB_TOKEN }}
-          echo "✅ GitHub token secret created"
+          kubectl delete secret github-token-secret --ignore-not-found
+          kubectl create secret generic github-token-secret \
+            --from-literal=GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare and Apply CronJob YAML
+      - name: Install CronJob
         if: ${{ inputs.ACTION == 'Install' }}
         run: |
-          sed -i "s|{{SERVICE_NAME}}|${{ inputs.SERVICE_NAME }}|g" k8s/cronjob.yaml
-          sed -i "s|{{PROJECT_ID}}|${{ inputs.PROJECT_ID }}|g" k8s/cronjob.yaml
-          sed -i "s|{{REGION}}|${{ inputs.REGION }}|g" k8s/cronjob.yaml
-          sed -i "s|{{TRAFFIC_SHIFT}}|${{ inputs.TRAFFIC_SHIFT }}|g" k8s/cronjob.yaml
-          sed -i "s|{{CRON_PERIOD}}|${{ inputs.CRON_PERIOD }}|g" k8s/cronjob.yaml
-
-          kubectl apply -f k8s/cronjob.yaml
+          sed "s|{{CRON_SCHEDULE}}|${{ inputs.CRON_PERIOD }}|g;
+               s|{{SERVICE_NAME}}|${{ inputs.SERVICE_NAME }}|g;
+               s|{{PROJECT_ID}}|${{ inputs.PROJECT_ID }}|g;
+               s|{{REGION}}|${{ inputs.REGION }}|g;
+               s|{{TRAFFIC_SHIFT}}|${{ inputs.TRAFFIC_SHIFT }}|g;" \
+            .github/k8s/trigger-bluegreen-cronjob.yaml | kubectl apply -f -
 
       - name: Uninstall CronJob
         if: ${{ inputs.ACTION == 'Uninstall' }}
         run: |
-          kubectl delete cronjob progressive-bluegreen || true
-          kubectl delete secret github-token || true
-          echo "🗑️ Uninstalled CronJob and secret"
+          kubectl delete cronjob progressive-bluegreen-cronjob --ignore-not-found
+
+
+
 
 
 
@@ -82,38 +71,42 @@ jobs:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: progressive-bluegreen
+  name: progressive-bluegreen-cronjob
 spec:
-  schedule: "{{CRON_PERIOD}}"
+  schedule: "{{CRON_SCHEDULE}}"
   jobTemplate:
     spec:
       template:
         spec:
-          containers:
-            - name: gh-workflow
-              image: ghcr.io/nektos/act-environments-ubuntu:18.04  # or another runner image
-              env:
-                - name: GITHUB_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: github-token
-                      key: token
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  echo "Triggering workflow using act with token..."
-                  act -W .github/workflows/progressive-bluegreen.yml \
-                      -P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest \
-                      -e <(echo '{
-                        "inputs": {
-                          "SERVICE_NAME": "{{SERVICE_NAME}}",
-                          "PROJECT_ID": "{{PROJECT_ID}}",
-                          "REGION": "{{REGION}}",
-                          "TRAFFIC_SHIFT": "{{TRAFFIC_SHIFT}}"
-                        }
-                      }')
           restartPolicy: OnFailure
+          containers:
+          - name: trigger-deploy
+            image: curlimages/curl:latest
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "📡 Triggering Blue-Green Workflow via GitHub API..."
+
+                curl -X POST https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/bluegreen-progressive.yaml/dispatches \
+                  -H "Authorization: token ${GITHUB_TOKEN}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  -d '{
+                    "ref": "main",
+                    "inputs": {
+                      "SERVICE_NAME": "{{SERVICE_NAME}}",
+                      "PROJECT_ID": "{{PROJECT_ID}}",
+                      "REGION": "{{REGION}}",
+                      "TRAFFIC_SHIFT": "{{TRAFFIC_SHIFT}}"
+                    }
+                  }'
+            env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-token-secret
+                  key: GITHUB_TOKEN
+            - name: GITHUB_REPOSITORY
+              value: "your-org/your-repo" # Replace this!
 
 
 
@@ -165,6 +158,28 @@ jobs:
       CRON_PERIOD: '*/5 * * * *'  # Not important for uninstall
       ACTION: Uninstall
     secrets: inherit
+
+
+
+
+    - name: Uninstall Scheduler if Green is 100%
+      if: ${{ env.GREEN_PERCENT == '100' }}
+      run: |
+        echo "🧹 Green is at 100%, removing Cron scheduler..."
+        curl -X POST https://api.github.com/repos/${{ github.repository }}/actions/workflows/schedule-progressive.yaml/dispatches \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          -d '{
+            "ref": "main",
+            "inputs": {
+              "SERVICE_NAME": "${{ inputs.SERVICE_NAME }}",
+              "PROJECT_ID": "${{ inputs.PROJECT_ID }}",
+              "REGION": "${{ inputs.REGION }}",
+              "TRAFFIC_SHIFT": "${{ inputs.TRAFFIC_SHIFT }}",
+              "CRON_PERIOD": "* * * * *",
+              "ACTION": "Uninstall"
+            }
+          }'
 
 
 
