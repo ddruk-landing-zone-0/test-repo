@@ -1,4 +1,15 @@
 https://0825-202-168-84-98.ngrok-free.app
+
+What problem did it solve?
+This Terraform refactoring reduced lines of code (LOC), removed redundancies, and increased reusability.
+
+What solution is implemented?
+Configuration lists were created in the locals. All types of roles and service accounts are mapped in locals and reused. Looping is used to allocate different instances of the same type of resource and module. Outputs are stored so they can be used as remote variables in other plugins.
+
+How can it be adopted?
+A README has been added in all plugins.
+
+
 ```
 name: Progressive Blue-Green Deployment to Cloud Run
 
