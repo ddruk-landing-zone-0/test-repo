@@ -1,3 +1,141 @@
+No Vuln Image
+
+https://storage.googleapis.com/cloud-ai-police-bucket-0/images/qdrant-qdrant-latest_23dec_2025.tar
+https://storage.googleapis.com/cloud-ai-police-bucket-0/images/rabbitmq-management-alpine.tar
+https://storage.googleapis.com/cloud-ai-police-bucket-0/images/redis-latest_23dec_2025.tar
+https://storage.googleapis.com/cloud-ai-police-bucket-0/images/python_3_13-agent_gcloud.tar
+
+
+
+
+----------
+Dockerfile
+
+```
+# Python 3.13 slim base image
+FROM python:3.13-slim
+
+# Environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set working directory
+WORKDIR /app
+
+RUN apt-get update
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    # build-essential \
+    # gcc \
+    # g++ \
+    make \
+    curl \ 
+    wget \
+    git \
+    ca-certificates \
+    openssl \
+    libssl-dev \
+    libffi-dev \
+    # libpq-dev \
+    netcat-openbsd \
+    iputils-ping \
+    procps \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and build tools
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Copy requirements first (layer caching)
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+```
+
+
+Req.txt
+
+```
+# Server
+fastapi
+uvicorn
+flask
+gunicorn
+flask-cors
+
+# Database
+psycopg2-binary
+sqlalchemy
+pymongo
+dnspython
+
+# Data Processing
+pandas
+numpy
+scipy
+scikit-learn
+
+
+# gcloud
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+
+
+# Scalabilty
+celery[redis]
+redis
+boto3
+protobuf3
+kombu
+
+# Kubernetes
+kubernetes
+kopf
+
+# Vector DB
+# faiss-cpu
+qdrant-client
+
+# Langchain, langgraph etc
+langchain
+langchain-core
+langgraph
+langsmith
+langchain-community
+langchain-community[faiss]
+langchain-community[qdrant]
+
+
+# Others
+python-dotenv
+requests
+pytest
+pytest-cov
+urllib3==2.6.0
+colorlog
+pydantic
+pillow
+python-multipart
+aiofiles
+asyncio
+grpcio
+psutil
+typing
+deprecated
+datasketch      # MinHash + LSH for ≥90% similarity check
+xxhash          # ultra-fast hashing for dedup keys
+orjson          # very fast metadata serialization
+uvloop          # faster asyncio event loop (Linux/Mac)
+gensim          # streaming TF-IDF (better than sklearn for logs)
+```
+----------
+
+
+
 https://0825-202-168-84-98.ngrok-free.app
 
 What problem did it solve?
