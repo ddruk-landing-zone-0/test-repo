@@ -1,3 +1,103 @@
+# HTLL-IR-framework
+High throughput Low Latency Information Retrieval Framework
+
+## UV Guide for beginners
+### Downloading UV
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+Adding to PATH
+```
+echo 'export PATH="$HOME/.uv/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+or 
+
+echo 'export PATH="$HOME/.uv/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Verifying UV installation
+```
+uv --version
+```
+
+### Initializing UV project
+```
+uv init 
+```
+
+### To install dependencies
+```
+uv add numpy pandas 
+```
+
+### To install from requirements.txt ( Not needed if dependencies are already added in uv.lock )
+```
+uv add -r requirements.txt
+uv sync
+```
+
+### To run the python file
+```
+uv run python main.py
+```
+
+### How to install/pin the python version
+```
+uv python install 3.12
+uv python pin 3.12
+```
+
+## How to sync from existing environment
+```
+uv sync 
+```
+
+## UV Guide for beginners
+
+
+
+```
+#!/bin/bash
+
+set -e
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <file.cpp>"
+    exit 1
+fi
+
+SRC="$1"
+OUT="${SRC%.cpp}"
+
+cleanup() {
+    if [ -f "$OUT" ]; then
+        rm -f "$OUT"
+        echo "🧹 Cleaned up executable: $OUT"
+    fi
+}
+
+# Run cleanup on script exit (success, failure, Ctrl+C)
+trap cleanup EXIT
+
+echo "Compiling $SRC ..."
+
+if g++ "$SRC" -std=gnu++17 -O2 -Wall -Wextra -o "$OUT"; then
+    echo "✅ Compiled successfully"
+    echo "▶ Running $OUT"
+    ./"$OUT"
+else
+    echo "❌ Compilation failed"
+    exit 1
+fi
+
+```
+
+
+
+
+
 No Vuln Image
 
 1. qdrant/qdrant:latest_23dec_2025 >> https://storage.googleapis.com/cloud-ai-police-bucket-0/images/qdrant-qdrant-latest_23dec_2025.tar
