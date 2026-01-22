@@ -1,3 +1,57 @@
+Yes — **but it depends on which Google library / backend you’re using**.
+
+## 1) LangChain `ChatGoogleGenerativeAI` (langchain-google-genai)
+
+You can override the endpoint by passing **`client_options`** (it’s exposed in the docs as a “custom base URL” / `base_url` field that’s **aliased to `client_options`**). ([LangChain Documentation][1])
+
+Example:
+
+```python
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-pro",
+    api_key=api_key,
+    # docs show base_url is provided via alias 'client_options'
+    client_options="https://your.company.proxy.example.com/",  # or a dict (see below)
+)
+```
+
+Also, LangChain’s docs mention proxy support via env vars / `client_args` if what you really want is “route through gateway” rather than changing host. ([LangChain Documentation][1])
+
+## 2) Official **Google GenAI SDK** (`google-genai`, i.e. `from google import genai`)
+
+This SDK **explicitly supports a custom base URL**, but **(per docs) it’s currently supported for `vertexai=True`** and you pass it via `http_options`. ([Google APIs][2])
+
+```python
+from google import genai
+
+client = genai.Client(
+    vertexai=True,
+    project="your-project-id",
+    location="us-central1",
+    http_options={
+        "base_url": "https://test-api-gateway-proxy.com",
+        "headers": {"Authorization": "Bearer test_token"},
+    },
+)
+```
+
+## Practical guidance (what to choose)
+
+* If your company has a **gateway/proxy** in front of Google: using **proxy env vars** (HTTPS_PROXY) is often simplest (no SDK assumptions about hostnames/certs). ([LangChain Documentation][1])
+* If you truly need to **change the API host**:
+
+  * In **LangChain**: use `client_options` on `ChatGoogleGenerativeAI`. ([LangChain Documentation][1])
+  * In **google-genai**: use `http_options={"base_url": ...}` (Vertex AI path per docs). ([Google APIs][2])
+
+If you tell me which exact stack you’re on (**LangChain + Gemini Developer API** vs **LangChain + Vertex AI** vs **google-genai** directly), I’ll paste the exact minimal snippet for that path.
+
+[1]: https://reference.langchain.com/python/integrations/langchain_google_genai/ChatGoogleGenerativeAI/ "ChatGoogleGenerativeAI | LangChain Reference"
+[2]: https://googleapis.github.io/python-genai/ "Google Gen AI SDK documentation"
+
+
+
 
 ```
 from typing import Annotated,Sequence, TypedDict
