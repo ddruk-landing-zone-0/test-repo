@@ -1,3 +1,39 @@
+```
+# --- Short 2-level path prompt: parent/current % ---
+
+# Returns: "parent/current" (or "~" variants) in color
+prompt_2level_path() {
+  local p="${PWD/#$HOME/~}"   # replace $HOME with ~
+  local a b
+
+  if [[ "$p" == "~" ]]; then
+    echo "~"
+    return
+  fi
+
+  # split path by /
+  local -a parts
+  parts=("${(@s:/:)p}")
+
+  a="${parts[-2]}"
+  b="${parts[-1]}"
+
+  # handle root like "/etc" where parent is empty
+  [[ -z "$a" ]] && a="/"
+
+  echo "${a}/${b}"
+}
+
+# Cool coloring:
+# - path: cyan
+# - percent: purple
+setopt PROMPT_SUBST
+PROMPT='%F{cyan}$(prompt_2level_path)%f %F{magenta}%%%f '
+
+alias uvpy="uv run python"
+
+```
+
 Yes — **but it depends on which Google library / backend you’re using**.
 
 ## 1) LangChain `ChatGoogleGenerativeAI` (langchain-google-genai)
