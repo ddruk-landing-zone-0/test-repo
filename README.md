@@ -1,4 +1,7 @@
 ```
+https://storage.googleapis.com/k8s-study-test/bitnami_postgres_latest.tar
+https://storage.googleapis.com/k8s-study-test/postgres_15-17-trixie.tar
+
 ~/Desktop % docker save -o bitnami_postgres_latest.tar bitnami/postgresql:latest
 ~/Desktop % docker save -o bitnami_postgres_latest.tar postgres:sha256:f30e3de0ac9cc938dac627ef2231099867c694b5f949fadb924c8c977428c399
 ~/Desktop % docker save -o postgres_15-17-trixie.tar postgres:15.17-trixie
