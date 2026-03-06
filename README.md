@@ -1,4 +1,9 @@
 ```
+~/Desktop % docker save -o bitnami_postgres_latest.tar bitnami/postgresql:latest
+~/Desktop % docker save -o bitnami_postgres_latest.tar postgres:sha256:f30e3de0ac9cc938dac627ef2231099867c694b5f949fadb924c8c977428c399
+~/Desktop % docker save -o postgres_15-17-trixie.tar postgres:15.17-trixie
+
+
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent" \
     -H "x-goog-api-key: $GEMINI_API_KEY" \
     -H 'Content-Type: application/json' \
