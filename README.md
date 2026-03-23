@@ -1,4 +1,83 @@
 ```
+#!/bin/bash
+
+# Default chunk size is 99MB if not provided as the second argument
+FILE_PATH="$1"
+CHUNK_SIZE_MB="${2:-99}"
+
+if [ -z "$FILE_PATH" ] || [ ! -f "$FILE_PATH" ]; then
+    echo "Usage: $0 <file_path> [chunk_size_mb]"
+    echo "Example: $0 ./splade-cocodenser-ensembled/pytorch_model.bin 99"
+    exit 1
+fi
+
+FILE_NAME=$(basename "$FILE_PATH")
+FILE_DIR=$(dirname "$FILE_PATH")
+CHUNK_DIR="${FILE_DIR}/${FILE_NAME}_chunks"
+
+# Create directory for chunks
+mkdir -p "$CHUNK_DIR"
+
+# The 'split' command handles the heavy lifting here:
+# -b : sets the byte size (M stands for Megabytes)
+# -d : uses numeric suffixes (e.g., .part00, .part01) instead of alphabetical (aa, ab)
+split -b "${CHUNK_SIZE_MB}M" -d "$FILE_PATH" "${CHUNK_DIR}/${FILE_NAME}.part"
+
+# Count the generated chunks
+CHUNK_COUNT=$(find "$CHUNK_DIR" -maxdepth 1 -name "${FILE_NAME}.part*" | wc -l)
+
+# Strip leading whitespace from wc output using xargs
+CHUNK_COUNT=$(echo $CHUNK_COUNT | xargs)
+
+echo "File split into ${CHUNK_COUNT} chunks in ${CHUNK_DIR}"
+
+
+
+
+
+
+
+#!/bin/bash
+
+CHUNK_DIR="$1"
+OUTPUT_FILE="$2"
+
+if [ -z "$CHUNK_DIR" ] || [ -z "$OUTPUT_FILE" ]; then
+    echo "Usage: $0 <chunk_dir> <output_file>"
+    echo "Example: $0 ./src/book1.pdf_chunks ./src/book1_reconstructed.pdf"
+    exit 1
+fi
+
+# Initialize/clear the output file
+> "$OUTPUT_FILE"
+
+# Find all chunk files, sort them naturally/numerically (version sort: -V), 
+# and append them to the output file using cat.
+# 'sort -V' ensures that part10 comes after part9, not after part1.
+find "$CHUNK_DIR" -maxdepth 1 -type f -name "*.part*" | sort -V | while read -r chunk_file_path; do
+    cat "$chunk_file_path" >> "$OUTPUT_FILE"
+    echo "Merged chunk: $chunk_file_path"
+done
+
+echo "File merged into $OUTPUT_FILE"
+
+
+
+
+
+chmod +x split_file.sh merge_chunks.sh
+
+Then run them as you would your Python scripts:
+```bash
+./split_file.sh ./splade-cocodenser-ensembled/pytorch_model.bin 99
+./merge_chunks.sh ./src/book1.pdf_chunks ./src/book1_reconstructed.pdf
+
+
+
+
+
+
+
 https://storage.googleapis.com/k8s-study-test/bitnami_postgres_latest.tar
 https://storage.googleapis.com/k8s-study-test/postgres_15-17-trixie.tar
 
