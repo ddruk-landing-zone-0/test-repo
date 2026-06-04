@@ -1,4 +1,348 @@
 ```
+This UI looks like a modern AI-powered Kubernetes/SRE Operations Dashboard with:
+
+Dark theme + glassmorphism
+
+Gradient blue → purple background
+
+KPI cards at top
+
+Critical alerts banner
+
+Workload health matrix/grid
+
+AI assistant panel on right
+
+Quick actions
+
+Previous investigations/history
+
+
+You can give Copilot (or Cursor/Windsurf/Claude Code) a detailed prompt like this:
+
+
+---
+
+Copilot Prompt
+
+Build a modern enterprise-grade AI SRE Dashboard using React + TypeScript + Material UI (or Tailwind CSS).
+
+Theme
+
+Dark mode only
+
+Background: deep navy (#0B1020)
+
+Accent gradient: blue → purple (#2563EB → #9333EA)
+
+Glassmorphism cards with:
+
+backdrop blur
+
+subtle border
+
+soft shadow
+
+
+Rounded corners (16px)
+
+Smooth hover animations
+
+Enterprise monitoring product look
+
+
+
+---
+
+Page Layout
+
+----------------------------------------------------
+| Header                                           |
+----------------------------------------------------
+| Critical Issues Banner                           |
+----------------------------------------------------
+| KPI Cards Row                                    |
+----------------------------------------------------
+|                                                   |
+| Workload Error Matrix      | AI SRE Assistant    |
+|                            |                     |
+|                            |                     |
+|                            |                     |
+|                            |                     |
+----------------------------------------------------
+| Investigation History                           |
+----------------------------------------------------
+
+
+---
+
+Header
+
+Display:
+
+Greeting
+
+Current environment
+
+Last updated timestamp
+
+Refresh button
+
+Notifications icon
+
+
+Example:
+
+Good Morning, John
+
+Here's what's happening with your systems
+
+Last Updated: 3 mins ago
+[Refresh] [Notifications]
+
+
+---
+
+Critical Issues Banner
+
+Large gradient card.
+
+Left side:
+
+Warning icon
+
+3 Issues Need Your Attention
+1 High Priority
+2 Medium Priority
+
+Right side:
+
+Primary CTA button
+
+View All Issues
+
+Color:
+
+Orange warning icon
+
+Blue CTA
+
+
+
+---
+
+KPI Overview Cards
+
+Create 4 metric cards.
+
+Card 1
+
+12
+Open Issues
+
+Card 2
+
+8
+Affected Workloads
+
+Card 3
+
+32%
+CrashLoop Backoff
+
+Card 4
+
+Poor
+Cluster Health
+
+Requirements:
+
+Equal width
+
+Hover animation
+
+Gradient border
+
+
+
+---
+
+Workload Error Matrix
+
+Main section.
+
+Title:
+
+Workload Errors
+
+Add Filter button.
+
+Display grouped workload tiles.
+
+Pod Initializing
+
+□ □ □ □ □ □ □
+
+CrashLoopBackOff
+
+□ □ □ □
+
+ImagePullBackOff
+
+□ □ □ □ □
+
+Each tile represents a workload.
+
+Tile states:
+
+Healthy = green
+
+Warning = yellow
+
+Critical = red
+
+Unknown = gray
+
+
+Hover should show:
+
+Pod Name
+Namespace
+Node
+Status
+Restart Count
+
+Clicking tile opens details drawer.
+
+
+---
+
+AI SRE Assistant Panel
+
+Right side sticky card.
+
+Title:
+
+Your AI SRE Agent
+Always learning. Always here to help.
+
+Actions:
+
+Search For An Issue
+
+Icon: Search
+
+Description:
+
+Search and investigate across workloads, pods and services.
+
+
+---
+
+Ask The System
+
+Icon: Chat
+
+Description:
+
+Ask questions about incidents and health.
+
+
+---
+
+Run A Known Workflow
+
+Icon: Workflow
+
+Description:
+
+Execute remediation workflows.
+
+
+---
+
+Investigation History
+
+Bottom card.
+
+List previous investigations.
+
+Each item:
+
+CrashLoopBackOff on payment-service
+
+2 June 2026
+8:38 AM IST
+
+>
+
+Support:
+
+Pagination
+
+View All link
+
+
+
+---
+
+UX Requirements
+
+Responsive desktop-first design
+
+Loading skeletons
+
+Smooth transitions
+
+Framer Motion animations
+
+Accessible colors
+
+Keyboard navigation
+
+Sticky AI assistant panel
+
+Virtualized workload grid for performance
+
+
+
+---
+
+Suggested Component Wireframe
+
+┌─────────────────────────────────────────────────────────────┐
+│ Good Morning John                          🔔  ↻           │
+├─────────────────────────────────────────────────────────────┤
+│ ⚠ 3 Issues Need Your Attention        [View All Issues]     │
+├─────────────┬─────────────┬─────────────┬───────────────────┤
+│ 12          │ 8           │ 32%         │ Poor              │
+│ Open Issues │ Workloads   │ Backoff     │ Cluster Health    │
+├───────────────────────────────┬─────────────────────────────┤
+│                               │ AI SRE Agent               │
+│ Workload Errors               │                             │
+│                               │ 🔍 Search Issue            │
+│ Pod Initializing              │                             │
+│ □ □ □ □ □ □ □                │ 💬 Ask System              │
+│                               │                             │
+│ CrashLoopBackOff              │ ⚡ Run Workflow            │
+│ □ □ □ □                      │                             │
+│                               │                             │
+│ ImagePullBackOff              │                             │
+│ □ □ □ □ □                    │                             │
+├───────────────────────────────┴─────────────────────────────┤
+│ Investigation History                                   →  │
+│ CrashLoopBackOff on payment-service                        │
+└─────────────────────────────────────────────────────────────┘
+
+If you're using React + TypeScript, I can also generate the complete component hierarchy and folder structure (DashboardContainer, KpiCards, WorkloadMatrix, AiAgentPanel, etc.) ready for implementation.
+```
+
+
+
+
+
+
+```
 #!/bin/bash
 
 # Default chunk size is 99MB if not provided as the second argument
