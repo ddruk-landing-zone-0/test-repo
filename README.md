@@ -1,3 +1,240 @@
+
+```
+class BlockEnergyTracker:
+    """Tracks the normalized structural density (energy per element) of block-partitioned gradients."""
+    def __init__(self, beta1, num_blocks, block_partition_interval):
+        self.beta1 = beta1
+        self.num_blocks = num_blocks
+        self.block_partition_interval = block_partition_interval
+        self.block_partition = {}
+        
+        self.tracking_results = {
+            "intra_block_energy": {},       # Mean density inside the blocks
+            "inter_block_energy": {},       # Mean density between different blocks
+            "ratio_block_energy": {},       # inter_density / intra_density
+            "intra_block_energy_ortho": {}, # Mean density inside orthogonalized blocks
+            "inter_block_energy_ortho": {}, # Mean density between orthogonalized blocks
+            "ratio_block_energy_ortho": {}, # inter_density_ortho / intra_density_ortho
+        }
+
+        self.batch_counter = 0
+
+    def update(self, grads, gradient_gram_ema):
+        # Trigger re-partitioning at specified intervals or on the very first pass
+        if not self.block_partition or self.batch_counter % self.block_partition_interval == 0:
+            print(f"\nRe-partitioning at batch {self.batch_counter}\n")
+            self.block_partition = generate_block_partition(grads, gradient_gram_ema, self.num_blocks)
+        
+        # Increment batch counter on every single step
+        self.batch_counter += 1
+        
+        for layer_name, grad in grads.items():
+            if grad is None:
+                continue
+                
+            # Initialize empty lists for historical appending if layer is new
+            for key in self.tracking_results.keys():
+                if layer_name not in self.tracking_results[key]:
+                    self.tracking_results[key][layer_name] = []
+
+            layer_blocks = self.block_partition.get(layer_name, [])
+            if not layer_blocks:
+                continue
+
+            m = grad.size(0)
+            total_elements = m * m
+
+            # =========================================================
+            # 1. Base Block Energy Density (Exploiting Gram EMA)
+            # =========================================================
+            gram_ema = gradient_gram_ema.get(layer_name)
+            if gram_ema is None:
+                continue
+                
+            total_sum = gram_ema.sum()
+            intra_sum = 0.0
+            intra_elements = 0
+
+            for block_indices in layer_blocks:
+                idx_tensor = torch.tensor(block_indices, device=gram_ema.device)
+                block_sum = gram_ema[idx_tensor][:, idx_tensor].sum()
+                intra_sum += block_sum
+                # Count elements in this block square (m_b x m_b)
+                intra_elements += len(block_indices) ** 2
+
+            inter_sum = total_sum - intra_sum
+            inter_elements = total_elements - intra_elements
+
+            # Compute Final Average Density (sum / elements)
+            intra_density = intra_sum / max(1, intra_elements)
+            inter_density = inter_sum / max(1, inter_elements)
+            ratio = inter_density / (intra_density + 1e-8)
+
+            # =========================================================
+            # 2. Orthogonalized Block Energy Density
+            # =========================================================
+            grad_ortho_blocked = block_orthogonalize(
+                grad, layer_blocks, 
+                ns_coefficients=(DEFAULT_A, DEFAULT_B, DEFAULT_C), 
+                ns_steps=DEFAULT_NS_STEPS, eps=EPS
+            )
+            
+            gram_ortho = gram_matrix(grad_ortho_blocked, grad_ortho_blocked, normalize=False)
+            
+            total_sum_ortho = gram_ortho.sum()
+            intra_sum_ortho = 0.0
+            intra_elements_ortho = 0
+
+            for block_indices in layer_blocks:
+                idx_tensor = torch.tensor(block_indices, device=gram_ortho.device)
+                block_sum_ortho = gram_ortho[idx_tensor][:, idx_tensor].sum()
+                intra_sum_ortho += block_sum_ortho
+                intra_elements_ortho += len(block_indices) ** 2
+
+            inter_sum_ortho = total_sum_ortho - intra_sum_ortho
+            inter_elements_ortho = total_elements - intra_elements_ortho
+
+            # Compute Final Average Density for orthogonalized tensors
+            intra_density_ortho = intra_sum_ortho / max(1, intra_elements_ortho)
+            inter_density_ortho = inter_sum_ortho / max(1, inter_elements_ortho)
+            ratio_ortho = inter_density_ortho / (intra_density_ortho + 1e-8)
+
+            # =========================================================
+            # 3. Store Averaged Density Results
+            # =========================================================
+            self.tracking_results["intra_block_energy"][layer_name].append(intra_density.item())
+            self.tracking_results["inter_block_energy"][layer_name].append(inter_density.item())
+            self.tracking_results["ratio_block_energy"][layer_name].append(ratio.item())
+            
+            self.tracking_results["intra_block_energy_ortho"][layer_name].append(intra_density_ortho.item())
+            self.tracking_results["inter_block_energy_ortho"][layer_name].append(inter_density_ortho.item())
+            self.tracking_results["ratio_block_energy_ortho"][layer_name].append(ratio_ortho.item())
+
+        return self.tracking_results
+
+
+
+
+
+def block_orthogonalize(matrix, block_indices_list, ns_coefficients=(3.4445, -4.7750, 2.0315), ns_steps=5, eps=1e-6):
+    """
+    Applies Newton-Schulz orthogonalization independently to specified row-blocks of a matrix.
+    
+    Args:
+        matrix: The full 2D gradient tensor (m x n).
+        block_indices_list: A list of lists, where each sublist contains the row indices for a block.
+        
+    Returns:
+        torch.Tensor: A new tensor of shape (m x n) where each defined block is orthogonalized.
+    """
+    out = torch.zeros_like(matrix)
+    for indices in block_indices_list:
+        if not indices:
+            continue
+            
+        block = matrix[indices, :]
+        
+        # Apply Newton-Schulz to the slice
+        block_ortho = _zeropower_via_newtonschulz(
+            block, 
+            ns_coefficients=ns_coefficients, 
+            ns_steps=ns_steps, 
+            eps=eps
+        )
+        
+        # Reassign to the corresponding location in the output matrix
+        out[indices, :] = block_ortho
+        
+    return out
+
+
+
+
+
+import torch
+
+def generate_block_partition(grads, gradient_gram_ema, num_blocks):
+    """
+    Generates a row-index partition for each layer.
+    Uses sequential partitioning if the Gram EMA is empty/zero, 
+    otherwise uses greedy affinity clustering to maximize intra-block similarity.
+    """
+    partitions = {}
+    
+    for layer_name, grad in grads.items():
+        if grad is None:
+            continue
+            
+        m = grad.size(0)
+        device = grad.device
+        
+        # Fallback: If m < num_blocks or the Gram matrix is entirely zero (e.g., Epoch 0)
+        gram_ema = gradient_gram_ema.get(layer_name)
+        if m < num_blocks or gram_ema is None or torch.all(gram_ema == 0):
+            base_size = m // num_blocks
+            remainder = m % num_blocks
+            curr = 0
+            layer_parts = []
+            for i in range(num_blocks):
+                size = base_size + (1 if i < remainder else 0)
+                if size > 0:
+                    layer_parts.append(list(range(curr, curr + size)))
+                    curr += size
+            partitions[layer_name] = layer_parts
+            continue
+
+        # Affinity Partitioning (Greedy)
+        base_size = m // num_blocks
+        remainder = m % num_blocks
+        cluster_sizes = [base_size + 1 if i < remainder else base_size for i in range(num_blocks)]
+
+        unassigned_mask = torch.ones(m, dtype=torch.bool, device=device)
+        layer_parts = []
+
+        for size in cluster_sizes:
+            if size == 0:
+                continue
+
+            cluster = []
+            remaining_indices = torch.nonzero(unassigned_mask).squeeze(-1)
+            if len(remaining_indices) == 0:
+                break
+                
+            # Seed the cluster
+            sub_affinity = gram_ema[unassigned_mask][:, unassigned_mask]
+            degrees = sub_affinity.sum(dim=1)
+            seed_idx = remaining_indices[torch.argmax(degrees)].item()
+
+            cluster.append(seed_idx)
+            unassigned_mask[seed_idx] = False
+
+            # Greedily expand
+            for _ in range(size - 1):
+                remaining_indices = torch.nonzero(unassigned_mask).squeeze(-1)
+                cluster_tensor = torch.tensor(cluster, device=device)
+                
+                scores = gram_ema[remaining_indices][:, cluster_tensor].sum(dim=1)
+                best_idx = remaining_indices[torch.argmax(scores)].item()
+
+                cluster.append(best_idx)
+                unassigned_mask[best_idx] = False
+
+            layer_parts.append(cluster)
+            
+        partitions[layer_name] = layer_parts
+        
+    return partitions
+
+
+
+
+```
+
+
+
+
+
+
 ```
 This UI looks like a modern AI-powered Kubernetes/SRE Operations Dashboard with:
 
